@@ -107,7 +107,9 @@ void setup() {
     // Start Advertising -> dont advertise services. they are discoverable but can only be used on connect
     //Bluefruit.Advertising.addService(measurementService);
     //Bluefruit.Advertising.addService(batteryService);
-    Bluefruit.Advertising.addName();
+    //Bluefruit.Advertising.addName();
+    // can use Bluefruit.ScanResponse.addName(); 
+    Bluefruit.ScanResponse.addName();
     Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
     Bluefruit.Advertising.restartOnDisconnect(true);
     Bluefruit.Advertising.start(0);
