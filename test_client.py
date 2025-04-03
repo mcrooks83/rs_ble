@@ -62,25 +62,6 @@ async def discover_device_by_name(target_name: str):
 # Callback to handle notifications from the notify characteristic
 def on_data(sender: int, data: bytearray):
     print(f"Received notification from {sender}: {data}")
-
-# Main function to connect and subscribe
-async def main():
-    remove_all_devices()
-    # Discover the device
-    devices = await discover_device_by_name("RS_VAG")
-    
-    device_name = ""
-    device_address = ""
-    for device, advertisement_data in devices:
-        device_name = advertisement_data.local_name
-        device_address = device.address
-        print(f"Device: {device}")
-        print(f"Local Name: {advertisement_data.local_name}")
-        print(f"Address: {device.address}")
-        print("------")
-
-    print(device_address)
-
     
 # Connect and subscribe to notifications
 async def connect_device(device):
