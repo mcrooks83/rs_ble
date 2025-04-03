@@ -86,6 +86,10 @@ async def main():
 async def connect_device(device):
     async with BleakClient(device) as client:
         print(f"Connected to {device}")
+        for s in client.services:
+            print(s)
+            for characteristic in s.characteristics:
+                print(f"    Characteristic: {characteristic.uuid} - {characteristic.properties}")
 
         # Subscribe to a characteristic (you need to know UUID)
         # For example, subscribe to notifications (replace with correct UUID)

@@ -70,6 +70,10 @@ void setup() {
     Bluefruit.begin();
     Bluefruit.setName("RS_VAG");  // should be the advertising name
 
+    //could do something on connect and disconnect if required 
+    //Bluefruit.Periph.setConnectCallback(connect_callback);
+    //Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
+
 
     // Start Services & Characteristics
     measurementService.begin();
