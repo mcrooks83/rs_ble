@@ -4,7 +4,7 @@ from bleak import BleakScanner, BleakClient
 import dbus
 import time
 
-# UUIDs for your custom service and characteristic
+# UUIDs for custom service and characteristic
 
 '''
 #define MEASUREMENT_SERVICE_UUID         "f8300001-67d2-4b32-9a68-5f3d93a8b6a5"
@@ -95,10 +95,8 @@ async def connect_device(device):
 # Main function to discover and connect
 async def main():
     devices = await discover_device_by_name("RS_VAG")
-    device_name = ""
     device_address = ""
     for device, advertisement_data in devices:
-        device_name = advertisement_data.local_name
         device_address = device.address
         print(f"Device: {device}")
         print(f"Local Name: {advertisement_data.local_name}")
