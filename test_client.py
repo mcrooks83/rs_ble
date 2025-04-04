@@ -3,6 +3,8 @@ from bleak import BleakScanner, BleakClient
 
 import dbus
 import time
+import logging
+#logging.basicConfig(level=logging.DEBUG)
 
 # UUIDs for custom service and characteristic
 
@@ -17,6 +19,8 @@ MEASUREMENT_SERVICE_UUID     =  "f8300001-67d2-4b32-9a68-5f3d93a8b6a5"
 MEASUREMENT_NOTIFY_CHAR_UUID =  "f8300002-67d2-4b32-9a68-5f3d93a8b6a5"
 SENSOR_CONTROL_CHAR_UUID     =  "f8300003-67d2-4b32-9a68-5f3d93a8b6a5"
 SENSOR_IDENTIFY_CHAR_UUID    =  "f8300004-67d2-4b32-9a68-5f3d93a8b6a5"
+
+NORDIC_UART_SERVICE_UUID     =  "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 
 # Function to discover the device by name
 
@@ -67,33 +71,44 @@ def on_data(sender: int, data: bytearray):
 async def connect_device(device):
     async with BleakClient(device) as client:
         print(f"Connected to {device}")
-        for s in client.services:
+        _ = client.services  # triggers discovery
+        services = await client.get_services()
+        for s in services:
             print(s)
             for characteristic in s.characteristics:
                 print(f"    Characteristic: {characteristic.uuid} - {characteristic.properties}")
-
+        await asyncio.sleep(2)
         # Subscribe to a characteristic (you need to know UUID)
         # For example, subscribe to notifications (replace with correct UUID)
         #await client.start_notify(YOUR_CHARACTERISTIC_UUID, your_callback)
+        
+        # Subscribe to notifications
+        #MEASUREMENT_NOTIFY_CHAR_UUID NORDIC_UART_SERVICE_UUID
+        await client.start_notify(MEASUREMENT_NOTIFY_CHAR_UUID, on_data)
+        print("Subscribed to data")
 
         # try and indentify the device
-        await client.write_gatt_char(SENSOR_IDENTIFY_CHAR_UUID, bytearray([0x01]))
+        response = await client.write_gatt_char(SENSOR_IDENTIFY_CHAR_UUID, bytearray([0x01]))
         # Simulate LED flashing logic
         print("LED should be flashing now!")
-        await asyncio.sleep(5)
-
-        await client.start_notify(MEASUREMENT_NOTIFY_CHAR_UUID, on_data)
-        print("subscribed to data")
+        await asyncio.sleep(2)
 
         await client.write_gatt_char(SENSOR_CONTROL_CHAR_UUID, bytearray([0x01]))
-        time.sleep(5)
+        print("Streaming started")
+    
+        # Wait while data streams — non-blocking sleep
+        await asyncio.sleep(10)
+
+        # Stop streaming
         await client.write_gatt_char(SENSOR_CONTROL_CHAR_UUID, bytearray([0x00]))
+        print("Streaming stopped")
 
 
 # Callback for receiving notifications
 
 # Main function to discover and connect
 async def main():
+    #devices = await discover_device_by_name("SekMo B")
     devices = await discover_device_by_name("RS_VAG")
     device_address = ""
     for device, advertisement_data in devices:
