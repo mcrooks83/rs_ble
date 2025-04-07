@@ -21,7 +21,7 @@
 //#define SENSOR_CONTROL_CHAR_UUID         "f8300003-67d2-4b32-9a68-5f3d93a8b6a5" # maybe use this for axis selection
 #define SENSOR_IDENTIFY_CHAR_UUID        "f8300004-67d2-4b32-9a68-5f3d93a8b6a5"
 
-# an option may be to select an axis via a characteristic in this service.
+//an option may be to select an axis via a characteristic in this service.
 
 // measurement service 
 BLEService measurementService = BLEService(MEASUREMENT_SERVICE_UUID); // Custom Sensor Service UUID
@@ -77,8 +77,8 @@ void SysTick_Handler(void)
 {
 
   if(enableInt == 1){
-  //LSM6DSO32 read
-  digitalWrite(cSelect2, LOW);
+  //LSM6DSO32 read - consider wrapping this into a read accleromter function
+  digitalWrite(cSelect2, LOW);  //low selects the chip
   
     SPI.transfer(0xA8);
     
@@ -212,7 +212,10 @@ void connect_callback(uint16_t conn_handle)
 void setup() {
     Serial.begin(115200);
     delay(100);
+
+    //set pin as an output
     pinMode ( cSelect2, OUTPUT );
+    // set acceleromter chip high to deselect
     digitalWrite ( cSelect2, 1 );
 
     // on board led to indentify with
@@ -302,12 +305,19 @@ void setup() {
 
     //Software reset LSM6DSO32
     digitalWrite(cSelect2, LOW);
-        SPI.transfer(0x12); //CTRL3_C
+        SPI.transfer(0x12); //CTRL3_C register address
         SPI.transfer(0x05);
     digitalWrite(cSelect2, HIGH); 
 
+    //set up the multi-byte read and register sync
+    digitalWrite(cSelect2, LOW);
+      SPI.transfer(0x12);
+      SPI.transfer(0x44); // BDU = 1, IF_INC = 1
+    digitalWrite(cSelect2, HIGH);
+
     delay(100);
 
+    //sets ODR etc
     digitalWrite(cSelect2, LOW);
         SPI.transfer(0x10); //CTRL1_XL
         SPI.transfer(0xA0); //6.66 kHz ±4 g
