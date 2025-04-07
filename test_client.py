@@ -22,6 +22,9 @@ SENSOR_IDENTIFY_CHAR_UUID    =  "f8300004-67d2-4b32-9a68-5f3d93a8b6a5"
 
 NORDIC_UART_SERVICE_UUID     =  "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 
+
+MEASUREMENT_CHAR_UUID =  "f8300002-67d2-4b32-9a68-5f3d93a8b6a5"
+
 # Function to discover the device by name
 
 def match_devices(names, devices):
@@ -84,7 +87,7 @@ async def connect_device(device):
         
         # Subscribe to notifications
         #MEASUREMENT_NOTIFY_CHAR_UUID NORDIC_UART_SERVICE_UUID
-        await client.start_notify(MEASUREMENT_NOTIFY_CHAR_UUID, on_data)
+        await client.start_notify(MEASUREMENT_CHAR_UUID, on_data)
         print("Subscribed to data")
 
         # try and indentify the device
@@ -93,7 +96,7 @@ async def connect_device(device):
         #print("LED should be flashing now!")
         #await asyncio.sleep(2)
 
-        await client.write_gatt_char(SENSOR_CONTROL_CHAR_UUID, bytearray([0x01]))
+        await client.write_gatt_char(MEASUREMENT_CHAR_UUID, bytearray([0x01]))
         print("Streaming started")
     
         # Wait while data streams — non-blocking sleep

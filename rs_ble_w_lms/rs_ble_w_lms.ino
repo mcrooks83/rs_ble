@@ -18,13 +18,13 @@
 // BLE Services and Characteristics
 #define MEASUREMENT_SERVICE_UUID         "f8300001-67d2-4b32-9a68-5f3d93a8b6a5"
 #define MEASUREMENT_NOTIFY_CHAR_UUID     "f8300002-67d2-4b32-9a68-5f3d93a8b6a5"
-#define SENSOR_CONTROL_CHAR_UUID         "f8300003-67d2-4b32-9a68-5f3d93a8b6a5"
+//#define SENSOR_CONTROL_CHAR_UUID         "f8300003-67d2-4b32-9a68-5f3d93a8b6a5"
 #define SENSOR_IDENTIFY_CHAR_UUID        "f8300004-67d2-4b32-9a68-5f3d93a8b6a5"
 
 // measurement service 
 BLEService measurementService = BLEService(MEASUREMENT_SERVICE_UUID); // Custom Sensor Service UUID
 BLECharacteristic streamDataChar = BLECharacteristic(MEASUREMENT_NOTIFY_CHAR_UUID); // Notify Characteristic (Sensor Data)
-BLECharacteristic controlChar = BLECharacteristic(SENSOR_CONTROL_CHAR_UUID); // Write Characteristic (Start/Stop)
+//BLECharacteristic controlChar = BLECharacteristic(SENSOR_CONTROL_CHAR_UUID); // Write Characteristic (Start/Stop)
 BLECharacteristic identifyChar = BLECharacteristic(SENSOR_IDENTIFY_CHAR_UUID); // Write Characteristic (Identify - Flash LED)
 
 // battery service - uses the standard uuid for battery service
@@ -234,21 +234,28 @@ void setup() {
 
     // Add TXD Characteristic
 
-    streamDataChar.setProperties(CHR_PROPS_NOTIFY);  // sets the char to be notify that a client can subscribe to
-    streamDataChar.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
-    streamDataChar.setMaxLen( 247 );  //same as setting max mtu but must be done here as connection sets it in the first place
-    
+    //streamDataChar.setProperties(CHR_PROPS_NOTIFY);  // sets the char to be notify that a client can subscribe to
+    //streamDataChar.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
+    //streamDataChar.setMaxLen( 247 );  //same as setting max mtu but must be done here as connection sets it in the first place
     //.setFixedLen(247);
     //streamDataChar.setUserDescriptor("vag_data");
-    streamDataChar.setCccdWriteCallback(cccd_callback);
-    streamDataChar.begin();
+    //streamDataChar.setCccdWriteCallback(cccd_callback);
+    //streamDataChar.begin();
     
 
-    controlChar.setProperties(CHR_PROPS_WRITE);  // write only
-    controlChar.setPermission(SECMODE_OPEN, SECMODE_OPEN);
-    controlChar.setFixedLen(1);
-    controlChar.setWriteCallback(controlCallback);
-    controlChar.begin();
+    //controlChar.setProperties(CHR_PROPS_WRITE);  // write only
+    //controlChar.setPermission(SECMODE_OPEN, SECMODE_OPEN);
+    //controlChar.setFixedLen(1);
+    //controlChar.setWriteCallback(controlCallback);
+    //controlChar.begin();
+
+    //combine the notify and write
+    streamDataChar.setProperties(CHR_PROPS_NOTIFY | CHR_PROPS_WRITE);  // Allows both notify and write
+    streamDataChar.setPermission(SECMODE_OPEN, SECMODE_OPEN);
+    streamDataChar.setMaxLen(247);  // Same as setting max mtu, must be done here as connection sets it first
+    streamDataChar.setCccdWriteCallback(cccd_callback);  // This still handles client subscribe requests
+    streamDataChar.setWriteCallback(controlCallback);  // This handles writes to control the streaming
+    streamDataChar.begin();
 
     identifyChar.setProperties(CHR_PROPS_WRITE); // write only
     identifyChar.setPermission(SECMODE_OPEN, SECMODE_OPEN);
