@@ -179,6 +179,8 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason)
 {
   (void) conn_handle;
   (void) reason;
+  Serial.println();
+  Serial.print("Disconnected, reason = 0x"); Serial.println(reason, HEX);
 }
 
 
@@ -198,10 +200,11 @@ void connect_callback(uint16_t conn_handle)
   conn->requestMtuExchange(247);
 
   // request connection interval of 7.5 ms
-  //conn->requestConnectionParameter(6); // in unit of 1.25
+  conn->requestConnectionParameter(6); // in unit of 1.25 -> 12 gives 15ms 
+  //conn->requestConnectionParameter(40);
 
   // delay a bit for all the request to complete
-  delay(1);
+  delay(1000);
 }
 
 void setup() {
@@ -217,6 +220,10 @@ void setup() {
     Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);  
     Bluefruit.Periph.setConnectCallback(connect_callback);
     Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
+
+    Bluefruit.Periph.setConnInterval(6, 12);
+    //Bluefruit.Periph.setConnInterval(20, 40);
+
     Bluefruit.begin();
     Bluefruit.setName("RS_VAG");  // should be the advertising name
     //bledis.setManufacturer("Right Step");
@@ -230,6 +237,7 @@ void setup() {
     streamDataChar.setProperties(CHR_PROPS_NOTIFY);  // sets the char to be notify that a client can subscribe to
     streamDataChar.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
     streamDataChar.setMaxLen( 247 );  //same as setting max mtu but must be done here as connection sets it in the first place
+    
     //.setFixedLen(247);
     //streamDataChar.setUserDescriptor("vag_data");
     streamDataChar.setCccdWriteCallback(cccd_callback);
@@ -403,31 +411,32 @@ size_t writeDataOverBLE(uint16_t conn_hdl, const uint8_t *content, size_t len)
 void loop() {
 
     if (enableInt==1) {  //adding the is notification enabled check screws it up
-        uint16_t OUTATIME = 80;
+        //uint16_t OUTATIME = 80;
+
+        // connection interval 12 (15ms) -> now lowered to 6
+        uint16_t OUTATIME = 10;  //works at 20, 30 and 40 - 10 crashes at 15ms but works at 7.5
+        int number_of_values = 4;
         uint16_t Xout = dBufferIn / OUTATIME;
         if( Xout * OUTATIME != dBufferOut){
         
-            int16_t  outBuffer[OUTATIME];
+            //int16_t outBuffer[OUTATIME];
+            int16_t outBuffer[OUTATIME * 3];  //3 axis
             uint8_t * ptrOutBuffer = (uint8_t *) &outBuffer;
         
             for(uint16_t i = 0; i < OUTATIME; i++){
-                outBuffer[i] = acceleration_magnitude[dBufferOut + i];
+                //outBuffer[i] = acceleration_magnitude[dBufferOut + i];
+                outBuffer[i*number_of_values + 0] = accelerationx[dBufferOut + i];
+                outBuffer[i*number_of_values + 1] = accelerationy[dBufferOut + i];
+                outBuffer[i*number_of_values + 2] = accelerationz[dBufferOut + i];
+                outBuffer[i*number_of_values + 3] = acceleration_magnitude[dBufferOut + i];
+                
             }
-
-            Serial.print("outBuffer (Hex): ");
-            for (uint16_t i = 0; i < OUTATIME; i++) {
-                Serial.print("0x");
-                Serial.print(outBuffer[i], HEX);
-                if (i < OUTATIME - 1) {
-                    Serial.print(", "); // Add a comma between numbers
-                }
-            }
-            Serial.println();  // To end the line
-
 
             // taken from the ble uart service
-            writeDataOverBLE(Bluefruit.connHandle(), ptrOutBuffer, OUTATIME * 2);  // OUTATIME * 2 for 2 bytes per int16_t
-
+            //writeDataOverBLE(Bluefruit.connHandle(), ptrOutBuffer, OUTATIME * 2);  // OUTATIME * 2 for 2 bytes per int16_t
+            writeDataOverBLE(Bluefruit.connHandle(), ptrOutBuffer, OUTATIME * (number_of_values*2));  // 240 bytes = 40 samples * 6 bytes
+            //delay(10); // try and put a small delay between notifications
+            
             // Update the buffer out index
             dBufferOut = dBufferOut + OUTATIME;
             if (dBufferOut == bufferSize){dBufferOut = 0;}
