@@ -415,7 +415,7 @@ void loop() {
 
         // connection interval 12 (15ms) -> now lowered to 6
         uint16_t OUTATIME = 10;  //works at 20, 30 and 40 - 10 crashes at 15ms but works at 7.5
-        int number_of_values = 4;
+        int number_of_values = 4; // x, y,z and mag
         uint16_t Xout = dBufferIn / OUTATIME;
         if( Xout * OUTATIME != dBufferOut){
         
@@ -429,13 +429,11 @@ void loop() {
                 outBuffer[i*number_of_values + 1] = accelerationy[dBufferOut + i];
                 outBuffer[i*number_of_values + 2] = accelerationz[dBufferOut + i];
                 outBuffer[i*number_of_values + 3] = acceleration_magnitude[dBufferOut + i];
-                
             }
 
             // taken from the ble uart service
             //writeDataOverBLE(Bluefruit.connHandle(), ptrOutBuffer, OUTATIME * 2);  // OUTATIME * 2 for 2 bytes per int16_t
             writeDataOverBLE(Bluefruit.connHandle(), ptrOutBuffer, OUTATIME * (number_of_values*2));  // 240 bytes = 40 samples * 6 bytes
-            //delay(10); // try and put a small delay between notifications
             
             // Update the buffer out index
             dBufferOut = dBufferOut + OUTATIME;
