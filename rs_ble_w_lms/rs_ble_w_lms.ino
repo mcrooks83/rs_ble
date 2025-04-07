@@ -18,8 +18,10 @@
 // BLE Services and Characteristics
 #define MEASUREMENT_SERVICE_UUID         "f8300001-67d2-4b32-9a68-5f3d93a8b6a5"
 #define MEASUREMENT_NOTIFY_CHAR_UUID     "f8300002-67d2-4b32-9a68-5f3d93a8b6a5"
-//#define SENSOR_CONTROL_CHAR_UUID         "f8300003-67d2-4b32-9a68-5f3d93a8b6a5"
+//#define SENSOR_CONTROL_CHAR_UUID         "f8300003-67d2-4b32-9a68-5f3d93a8b6a5" # maybe use this for axis selection
 #define SENSOR_IDENTIFY_CHAR_UUID        "f8300004-67d2-4b32-9a68-5f3d93a8b6a5"
+
+# an option may be to select an axis via a characteristic in this service.
 
 // measurement service 
 BLEService measurementService = BLEService(MEASUREMENT_SERVICE_UUID); // Custom Sensor Service UUID
@@ -162,16 +164,16 @@ void controlCallback(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data, u
 // Callback for identify characteristic (flash LED)
 void identifyCallback(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data, uint16_t len){
   Serial.println("Identify Callback Triggered");
-//void identifyCallback(BLECharacteristic *chr, uint8_t *data, uint16_t length) {
     if (data[0] == 0x01) {
         uint32_t startMillis = millis();
         
         while (millis() - startMillis < IDENTIFY_DURATION) {
             digitalWrite(LED_PIN, HIGH);  // Turn LED on
-            delay(500);                   // Wait for 500 milliseconds (0.5 seconds)
+            delay(100);                   // Wait for 500 milliseconds (0.5 seconds)
             digitalWrite(LED_PIN, LOW);   // Turn LED off
-            delay(500);                   // Wait for 500 milliseconds
+            delay(100);                   // Wait for 500 milliseconds
         }
+        digitalWrite(LED_PIN, HIGH); 
     }
 }
 
@@ -257,7 +259,7 @@ void setup() {
     streamDataChar.setWriteCallback(controlCallback);  // This handles writes to control the streaming
     streamDataChar.begin();
 
-    identifyChar.setProperties(CHR_PROPS_WRITE); // write only
+    identifyChar.setProperties(CHR_PROPS_WRITE | CHR_PROPS_READ); // write only
     identifyChar.setPermission(SECMODE_OPEN, SECMODE_OPEN);
     identifyChar.setFixedLen(1);
     identifyChar.setWriteCallback(identifyCallback);

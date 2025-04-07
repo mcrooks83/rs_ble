@@ -91,20 +91,20 @@ async def connect_device(device):
         print("Subscribed to data")
 
         # try and indentify the device
-        #response = await client.write_gatt_char(SENSOR_IDENTIFY_CHAR_UUID, bytearray([0x01]))
+        response = await client.write_gatt_char(SENSOR_IDENTIFY_CHAR_UUID, bytearray([0x01]))
         # Simulate LED flashing logic
         #print("LED should be flashing now!")
-        #await asyncio.sleep(2)
+        await asyncio.sleep(5)
 
         await client.write_gatt_char(MEASUREMENT_CHAR_UUID, bytearray([0x01]))
-        print("Streaming started")
+        #print("Streaming started")
     
         # Wait while data streams — non-blocking sleep
         await asyncio.sleep(10)
 
         # Stop streaming
-        await client.write_gatt_char(SENSOR_CONTROL_CHAR_UUID, bytearray([0x00]))
-        print("Streaming stopped")
+        await client.write_gatt_char(MEASUREMENT_CHAR_UUID, bytearray([0x00]))
+        #print("Streaming stopped")
 
         await client.disconnect()
 
