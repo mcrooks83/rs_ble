@@ -48,6 +48,7 @@ const uint16_t bufferSize = 16000;
 int16_t   accelerationx[bufferSize];
 int16_t   accelerationy[bufferSize];
 int16_t   accelerationz[bufferSize];
+int16_t   acceleration_magnitude[bufferSize];
 
 int16_t  spiBuffer[3];
 uint8_t * ptrspiBuffer = (uint8_t *) &spiBuffer;
@@ -106,6 +107,11 @@ void SysTick_Handler(void)
       avgValueY = avgValueY / 3;
       avgValueZ = avgValueZ / 3;
 
+      acceleration_magnitude[dBufferIn] = sqrt(
+          avgValueX * avgValueX +
+          avgValueY * avgValueY +
+          avgValueZ * avgValueZ
+      );
       accelerationx[dBufferIn] = avgValueX;
       accelerationy[dBufferIn] = avgValueY;
       accelerationz[dBufferIn] = avgValueZ;
@@ -305,7 +311,7 @@ void setup() {
 
     SysTick_Config( (F_CPU/sampleRate)*TICK_INTERVAL_MS );
 
-    bufferTXD(true);
+    //bufferTXD(true);
 }
 
 
@@ -405,8 +411,19 @@ void loop() {
             uint8_t * ptrOutBuffer = (uint8_t *) &outBuffer;
         
             for(uint16_t i = 0; i < OUTATIME; i++){
-                outBuffer[i] = accelerationz[dBufferOut + i];
+                outBuffer[i] = acceleration_magnitude[dBufferOut + i];
             }
+
+            Serial.print("outBuffer (Hex): ");
+            for (uint16_t i = 0; i < OUTATIME; i++) {
+                Serial.print("0x");
+                Serial.print(outBuffer[i], HEX);
+                if (i < OUTATIME - 1) {
+                    Serial.print(", "); // Add a comma between numbers
+                }
+            }
+            Serial.println();  // To end the line
+
 
             // taken from the ble uart service
             writeDataOverBLE(Bluefruit.connHandle(), ptrOutBuffer, OUTATIME * 2);  // OUTATIME * 2 for 2 bytes per int16_t

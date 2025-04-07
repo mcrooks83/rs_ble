@@ -65,8 +65,8 @@ async def discover_device_by_name(target_name: str):
 
 # Callback to handle notifications from the notify characteristic
 def on_data(sender: int, data: bytearray):
-    print(f"Received notification from {sender}: {data}")
-    
+    #print(f"Received notification from {sender}: {data}")
+    print(f"{data}", {len(data)})
 # Connect and subscribe to notifications
 async def connect_device(device):
     async with BleakClient(device) as client:
@@ -88,10 +88,10 @@ async def connect_device(device):
         print("Subscribed to data")
 
         # try and indentify the device
-        response = await client.write_gatt_char(SENSOR_IDENTIFY_CHAR_UUID, bytearray([0x01]))
+        #response = await client.write_gatt_char(SENSOR_IDENTIFY_CHAR_UUID, bytearray([0x01]))
         # Simulate LED flashing logic
-        print("LED should be flashing now!")
-        await asyncio.sleep(2)
+        #print("LED should be flashing now!")
+        #await asyncio.sleep(2)
 
         await client.write_gatt_char(SENSOR_CONTROL_CHAR_UUID, bytearray([0x01]))
         print("Streaming started")
@@ -102,6 +102,8 @@ async def connect_device(device):
         # Stop streaming
         await client.write_gatt_char(SENSOR_CONTROL_CHAR_UUID, bytearray([0x00]))
         print("Streaming stopped")
+
+        await client.disconnect()
 
 
 # Callback for receiving notifications
