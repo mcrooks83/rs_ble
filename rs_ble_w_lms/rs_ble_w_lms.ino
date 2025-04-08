@@ -146,15 +146,10 @@ void cccd_callback(uint16_t conn_hdl, BLECharacteristic* chr, uint16_t cccd_valu
 }
 // Callback for control characteristic (start/stop streaming)
 void controlCallback(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data, uint16_t len){
-    Serial.println("control Callback Triggered: ");
-    for (uint16_t i = 0; i < len; i++) {
-        Serial.print(data[i], HEX); // or DEC/BIN depending on what you want
-        Serial.print(" ");
-    }
-    Serial.println();
-
     if (data[0] == 0x01) {
         enableInt = 1;  // andres enable flag
+        streamDataChar.write8((uint8_t)0x00);  // reset the characteristic (should not call the callback function)
+
 
     } else if (data[0] == 0x00) {
         enableInt = 0;
