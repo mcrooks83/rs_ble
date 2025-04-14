@@ -30,11 +30,13 @@ BLECharacteristic streamDataChar = BLECharacteristic(MEASUREMENT_NOTIFY_CHAR_UUI
 BLECharacteristic identifyChar = BLECharacteristic(SENSOR_IDENTIFY_CHAR_UUID); // Write Characteristic (Identify - Flash LED)
 
 // battery service - uses the standard uuid for battery service
-BLEService batteryService = BLEService(0x180F);  // Battery Service UUID
-BLECharacteristic batteryChar = BLECharacteristic(0x2A19); // Battery Level Characteristic
+// use built in service
+//BLEService batteryService = BLEService(0x180F);  // Battery Service UUID
+//BLECharacteristic batteryChar = BLECharacteristic(0x2A19); // Battery Level Characteristic
 
 #define TICK_INTERVAL_MS    1
 BLEDis bledis; // device information
+BLEBas  blebas;  // battery service
 //BLEUart bleuart;
 
 uint32_t sampleRate = 6144; // hZ internal sample rate (I think)
@@ -42,7 +44,7 @@ byte avgTime = 0;
 int32_t  avgValueX = 0;
 int32_t  avgValueY = 0;
 int32_t  avgValueZ = 0;
-byte enableInt = 0;  // this could be the same as isStreaming
+byte enableInt = 0;  // enables the streaming to be transferred over ble when connected
 const int cSelect2 = 7;
 const uint16_t bufferSize = 16000;
 
@@ -57,13 +59,14 @@ uint8_t * ptrspiBuffer = (uint8_t *) &spiBuffer;
 uint16_t dBufferIn = 0;
 uint16_t dBufferOut = 0;
 
-
-uint32_t lastSampleTime = 0;
-uint8_t batteryLevel = 100; // Example initial battery level (in percent)
+// used to check although we are not using buffers
 bool _tx_buffered   = false;
 Adafruit_FIFO* _tx_fifo  = NULL;
 
 bool streamNotifyEnabled = false;
+uint8_t stream_command = 0x00;
+int number_of_values = 4; //default for all axis and mag
+uint16_t OUTATIME = 20; // made global so memory is not reallocated (not sure if this really matters)
 
 //*******************************************************************************************************************
 //Interrupt code. This runs periodically, set by sampleRate variable
@@ -90,10 +93,6 @@ void SysTick_Handler(void)
     ptrspiBuffer[5] = SPI.transfer(0x00);
 
   digitalWrite(cSelect2, HIGH);   
-
-    //timeBuffer[dBufferIn] = timeForBuffer;
-
-
     //Take average of 3 readings
 
     avgValueX = avgValueX + spiBuffer[0];
@@ -109,15 +108,29 @@ void SysTick_Handler(void)
       avgValueY = avgValueY / 3;
       avgValueZ = avgValueZ / 3;
 
-      acceleration_magnitude[dBufferIn] = sqrt(
+      /*acceleration_magnitude[dBufferIn] = sqrt(
+          avgValueX * avgValueX +
+          avgValueY * avgValueY +
+          avgValueZ * avgValueZ
+      );*/
+
+      int32_t magnitude = 0;
+      magnitude = sqrt(
           avgValueX * avgValueX +
           avgValueY * avgValueY +
           avgValueZ * avgValueZ
       );
+      //shift the result to fit more of it into int16_t
+      magnitude = magnitude - 32767;
+      magnitude = constrain(magnitude, -32768, 32767);
+      
+
+      // put in buffers
+      acceleration_magnitude[dBufferIn] = magnitude;
       accelerationx[dBufferIn] = avgValueX;
       accelerationy[dBufferIn] = avgValueY;
       accelerationz[dBufferIn] = avgValueZ;
-      
+
       avgValueX = 0;
       avgValueY = 0;
       avgValueZ = 0;
@@ -145,15 +158,59 @@ void cccd_callback(uint16_t conn_hdl, BLECharacteristic* chr, uint16_t cccd_valu
   }
 }
 // Callback for control characteristic (start/stop streaming)
+// this callback is on the streamDataChar 
 void controlCallback(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data, uint16_t len){
-    if (data[0] == 0x01) {
+
+    //commands that can be used
+
+    /*
+      0x01 stream all axis
+      0x02 stream mag
+      0x03 stream x
+      0x04 stream y
+      0x05 stream z
+      0x00 stop
+    */
+
+    // streams all axes and magnitude
+    switch (data[0]){
+      case 0x01:
+        stream_command = 0x01;
+        number_of_values = 4;
         enableInt = 1;  // andres enable flag
-        streamDataChar.write8((uint8_t)0x00);  // reset the characteristic (should not call the callback function)
+        break;
 
+      case 0x02: // stream only magnitude
+        stream_command = 0x02;
+        number_of_values = 1;
+        enableInt = 1;
+        break;
 
-    } else if (data[0] == 0x00) {
+      case 0x03: // stream only X
+        stream_command = 0x03;
+        number_of_values = 1;
+        enableInt = 1;
+        break;
+      
+      case 0x04: // stream only Y
+        stream_command = 0x04;
+        number_of_values = 1;
+        enableInt = 1;
+        break;
+
+      case 0x05: // stream only Z
+        stream_command = 0x03;
+        number_of_values = 1;
+        enableInt = 1;
+        break;
+      
+      case 0x00:
+        stream_command = 0x00;
         enableInt = 0;
+        break;
+
     }
+   
 }
 
 // Callback for identify characteristic (flash LED)
@@ -213,6 +270,10 @@ void setup() {
     // set acceleromter chip high to deselect
     digitalWrite ( cSelect2, 1 );
 
+    // battery pins
+    //pinMode(VBAT_ENABLE, OUTPUT);
+    //digitalWrite(VBAT_ENABLE, LOW);
+
     // on board led to indentify with
     pinMode(LED_PIN, OUTPUT);
 
@@ -223,32 +284,23 @@ void setup() {
 
     Bluefruit.Periph.setConnInterval(6, 12);
     //Bluefruit.Periph.setConnInterval(20, 40);
+    //Bluefruit.setTxPower(int8_t power)
+    
 
     Bluefruit.begin();
     Bluefruit.setName("RS_VAG");  // should be the advertising name
     //bledis.setManufacturer("Right Step");
     //bledis.setModel("RS VAG V1.0.0");
 
+    // Start BLE Battery Service
+    blebas.begin();
+    blebas.write(100);
+
     // Start Services & Characteristics
     measurementService.begin();
 
     // Add TXD Characteristic
-
-    //streamDataChar.setProperties(CHR_PROPS_NOTIFY);  // sets the char to be notify that a client can subscribe to
-    //streamDataChar.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
-    //streamDataChar.setMaxLen( 247 );  //same as setting max mtu but must be done here as connection sets it in the first place
-    //.setFixedLen(247);
-    //streamDataChar.setUserDescriptor("vag_data");
-    //streamDataChar.setCccdWriteCallback(cccd_callback);
-    //streamDataChar.begin();
-    
-
-    //controlChar.setProperties(CHR_PROPS_WRITE);  // write only
-    //controlChar.setPermission(SECMODE_OPEN, SECMODE_OPEN);
-    //controlChar.setFixedLen(1);
-    //controlChar.setWriteCallback(controlCallback);
-    //controlChar.begin();
-
+  
     //combine the notify and write
     streamDataChar.setProperties(CHR_PROPS_NOTIFY | CHR_PROPS_WRITE);  // Allows both notify and write
     streamDataChar.setPermission(SECMODE_OPEN, SECMODE_OPEN);
@@ -262,13 +314,6 @@ void setup() {
     identifyChar.setFixedLen(1);
     identifyChar.setWriteCallback(identifyCallback);
     identifyChar.begin();
-
-    // Setup Battery Service
-    batteryService.begin();
-    batteryChar.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
-    batteryChar.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
-    batteryChar.setFixedLen(1);
-    batteryChar.begin();
 
     // Add Device Address to Advertising Packet
     uint8_t macAddress[6];
@@ -337,8 +382,8 @@ void setup() {
 }
 
 
-
-void bufferTXD(bool enable)
+// not used
+/*void bufferTXD(bool enable)
 {
   _tx_buffered = enable;
 
@@ -354,12 +399,13 @@ void bufferTXD(bool enable)
   {
     if ( _tx_fifo ) delete _tx_fifo;
   }
-}
+}*/
 
 bool notifyEnabled(uint16_t conn_hdl)
 {
   return streamDataChar.notifyEnabled(conn_hdl);
 }
+
 
 bool flushTXD(uint16_t conn_hdl)
 {
@@ -382,6 +428,8 @@ bool flushTXD(uint16_t conn_hdl)
 
   return result;
 }
+
+
 size_t writeDataOverBLE(uint16_t conn_hdl, const uint8_t *content, size_t len)
 {
   BLEConnection* conn = Bluefruit.Connection(conn_hdl);
@@ -422,27 +470,79 @@ size_t writeDataOverBLE(uint16_t conn_hdl, const uint8_t *content, size_t len)
   }
 }
 
+// get battery level
+void batLevel() {
+  // Read the ADC value from the battery pin
+  uint16_t ADCRead = analogRead(32);
+  
+  // Define minimum and maximum ADC readings based on your calibration values
+  const uint16_t adc_min = 2432; // corresponds to 0% battery level
+  const uint16_t adc_max = 3116; // corresponds to 100% battery level
+  
+  // Constrain the ADC reading to the [adc_min, adc_max] range:
+  if(ADCRead > adc_max) {
+    ADCRead = adc_max;
+  } else if(ADCRead < adc_min) {
+    ADCRead = adc_min;
+  }
+  
+  // Calculate the battery percentage as a float
+  float batteryPercent = ((float)(ADCRead - adc_min) / (adc_max - adc_min)) * 100.0;
+  
+  // If you require an integer percentage, you can cast the result:
+  uint8_t batOUT = (uint8_t)batteryPercent;
+  Serial.println(batOUT);
+  
+  // Output the battery percentage
+  blebas.write(batOUT);
+}
+
+
 void loop() {
 
     if (enableInt==1) {  //adding the is notification enabled check screws it up
-        //uint16_t OUTATIME = 80;
 
-        // connection interval 12 (15ms) -> now lowered to 6
-        uint16_t OUTATIME = 10;  //works at 20, 30 and 40 - 10 crashes at 15ms but works at 7.5
-        int number_of_values = 4; // x, y,z and mag
         uint16_t Xout = dBufferIn / OUTATIME;
         if( Xout * OUTATIME != dBufferOut){
         
-            //int16_t outBuffer[OUTATIME];
-            int16_t outBuffer[OUTATIME * 3];  //3 axis
+            int16_t outBuffer[OUTATIME * number_of_values];  
             uint8_t * ptrOutBuffer = (uint8_t *) &outBuffer;
-        
-            for(uint16_t i = 0; i < OUTATIME; i++){
-                //outBuffer[i] = acceleration_magnitude[dBufferOut + i];
-                outBuffer[i*number_of_values + 0] = accelerationx[dBufferOut + i];
-                outBuffer[i*number_of_values + 1] = accelerationy[dBufferOut + i];
-                outBuffer[i*number_of_values + 2] = accelerationz[dBufferOut + i];
-                outBuffer[i*number_of_values + 3] = acceleration_magnitude[dBufferOut + i];
+
+            // new code depending on stream_command
+            switch(stream_command){
+              case 0x01: // stream magnitude 
+                  for(uint16_t i = 0; i < OUTATIME; i++){
+                    outBuffer[i*number_of_values + 0] = accelerationx[dBufferOut + i];
+                    outBuffer[i*number_of_values + 1] = accelerationy[dBufferOut + i];
+                    outBuffer[i*number_of_values + 2] = accelerationz[dBufferOut + i];
+                    outBuffer[i*number_of_values + 3] = acceleration_magnitude[dBufferOut + i];
+                  }
+                break;
+
+              case 0x02: // magnitude only
+                for(uint16_t i = 0; i < OUTATIME; i++){
+                  outBuffer[i] = acceleration_magnitude[dBufferOut + i];
+                }
+                break;
+              
+              case 0x03: // X only
+                for(uint16_t i = 0; i < OUTATIME; i++){
+                  outBuffer[i] = accelerationx[dBufferOut + i];
+                }
+                break;
+              
+              case 0x04: // Y only
+                for(uint16_t i = 0; i < OUTATIME; i++){
+                  outBuffer[i] = accelerationy[dBufferOut + i];
+                }
+                break;
+              
+              case 0x05: // Z only
+                for(uint16_t i = 0; i < OUTATIME; i++){
+                  outBuffer[i] = accelerationz[dBufferOut + i];
+                }
+                break;
+
             }
 
             // taken from the ble uart service
@@ -451,7 +551,11 @@ void loop() {
             
             // Update the buffer out index
             dBufferOut = dBufferOut + OUTATIME;
-            if (dBufferOut == bufferSize){dBufferOut = 0;}
+            if (dBufferOut == bufferSize){
+              dBufferOut = 0;
+              
+            }
         }
     }
+    batLevel();  
 }
