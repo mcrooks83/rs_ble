@@ -4,6 +4,11 @@ from bleak import BleakScanner, BleakClient
 import dbus
 import time
 import logging
+import numpy as np
+
+from mmap import mmap, ACCESS_READ
+import struct
+from math import sqrt
 #logging.basicConfig(level=logging.DEBUG)
 
 # UUIDs for custom service and characteristic
@@ -14,16 +19,18 @@ import logging
 #define SENSOR_CONTROL_CHAR_UUID         "f8300003-67d2-4b32-9a68-5f3d93a8b6a5"
 #define SENSOR_IDENTIFY_CHAR_UUID        "f8300004-67d2-4b32-9a68-5f3d93a8b6a5"
 
+rs load sensor
+#define MEASUREMENT_SERVICE_UUID         "f9300001-67d2-4b32-9a68-5f3d93a8b6a5"
+#define MEASUREMENT_NOTIFY_CHAR_UUID     "f9300002-67d2-4b32-9a68-5f3d93a8b6a5"
+#define SENSOR_IDENTIFY_CHAR_UUID        "f9300004-67d2-4b32-9a68-5f3d93a8b6a5"
+
 '''
-MEASUREMENT_SERVICE_UUID     =  "f8300001-67d2-4b32-9a68-5f3d93a8b6a5"
-MEASUREMENT_NOTIFY_CHAR_UUID =  "f8300002-67d2-4b32-9a68-5f3d93a8b6a5"
-SENSOR_CONTROL_CHAR_UUID     =  "f8300003-67d2-4b32-9a68-5f3d93a8b6a5"
-SENSOR_IDENTIFY_CHAR_UUID    =  "f8300004-67d2-4b32-9a68-5f3d93a8b6a5"
+MEASUREMENT_SERVICE_UUID     =  "f9300001-67d2-4b32-9a68-5f3d93a8b6a5"
 
-NORDIC_UART_SERVICE_UUID     =  "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
+MEASUREMENT_CHAR_UUID        =  "f9300002-67d2-4b32-9a68-5f3d93a8b6a5"
+SENSOR_IDENTIFY_CHAR_UUID    =  "f9300004-67d2-4b32-9a68-5f3d93a8b6a5"
 
-
-MEASUREMENT_CHAR_UUID =  "f8300002-67d2-4b32-9a68-5f3d93a8b6a5"
+#NORDIC_UART_SERVICE_UUID     =  "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 
 # Function to discover the device by name
 
@@ -67,9 +74,43 @@ async def discover_device_by_name(target_name: str):
     
 
 # Callback to handle notifications from the notify characteristic
+
+# acc = g  conversion 0.000488f
+# gyro = degrees per second - conversion 0.061035 
+def parse_packet(packet):
+    # One sample: 6 signed 16-bit ints (gyro + accel)
+    sample_format = "<hhhhhh"  # GyroX, GyroY, GyroZ, AccX, AccY, AccZ
+    sample = struct.unpack(sample_format, packet)  # returns a tuple of 6 ints
+
+    decoded_packet = np.array(sample)
+    formatted_data = format_packet(decoded_packet)
+
+    return formatted_data
+
+def format_packet(decoded_packet):
+        acc_conversion = 0.00048828125 # 4g conversion factor
+        gyr_converstion = 0.06103515625
+        formatted_data = []
+
+        if(len(decoded_packet) == 6): # contains gryo and accel
+            # Apply conversion factor to x, y, z
+            sample = {
+                "accel_x": decoded_packet[3]*acc_conversion,
+                "accel_y": decoded_packet[4]*acc_conversion,
+                "accel_z": decoded_packet[5]*acc_conversion,
+                "gyr_x": decoded_packet[0]*gyr_converstion,
+                "gyr_y": decoded_packet[1]*gyr_converstion,
+                "gyr_z": decoded_packet[2]*gyr_converstion
+            }
+            # Add the converted sample to the list
+            formatted_data.append(sample)
+        return formatted_data # dont do any formatting yet
+
 def on_data(sender: int, data: bytearray):
-    #print(f"Received notification from {sender}: {data}")
-    print(f"{data}", {len(data)})
+    #print(f"{data}", {len(data)})
+    _packet = parse_packet(data)
+    print(_packet)
+
 # Connect and subscribe to notifications
 async def connect_device(device):
     async with BleakClient(device) as client:
@@ -91,12 +132,12 @@ async def connect_device(device):
         print("Subscribed to data")
 
         # try and indentify the device
-        #response = await client.write_gatt_char(SENSOR_IDENTIFY_CHAR_UUID, bytearray([0x01]))
+        response = await client.write_gatt_char(SENSOR_IDENTIFY_CHAR_UUID, bytearray([0x01]))
         # Simulate LED flashing logic
         #print("LED should be flashing now!")
         await asyncio.sleep(5)
 
-        await client.write_gatt_char(MEASUREMENT_CHAR_UUID, bytearray([0x01]))  # asks to stream all axes and magnitude
+        await client.write_gatt_char(MEASUREMENT_CHAR_UUID, bytearray([0x02]))  # asks to stream all axes and magnitude
         #await client.write_gatt_char(MEASUREMENT_CHAR_UUID, bytearray([0x02]))  # asks to stream  magnitude
         #await client.write_gatt_char(MEASUREMENT_CHAR_UUID, bytearray([0x03]))  # asks to stream  X
         #await client.write_gatt_char(MEASUREMENT_CHAR_UUID, bytearray([0x04]))  # asks to stream  Y
@@ -119,7 +160,7 @@ async def connect_device(device):
 # Main function to discover and connect
 async def main():
     #devices = await discover_device_by_name("SekMo B")
-    devices = await discover_device_by_name("RS_VAG")
+    devices = await discover_device_by_name("RS_LOAD")
     device_address = ""
     for device, advertisement_data in devices:
         device_address = device.address

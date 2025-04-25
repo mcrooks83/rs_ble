@@ -66,7 +66,7 @@ Adafruit_FIFO* _tx_fifo  = NULL;
 bool streamNotifyEnabled = false;
 uint8_t stream_command = 0x00;
 int number_of_values = 4; //default for all axis and mag
-uint16_t OUTATIME = 20; // made global so memory is not reallocated (not sure if this really matters)
+uint16_t OUTATIME = 100; // made global so memory is not reallocated (not sure if this really matters)
 
 //*******************************************************************************************************************
 //Interrupt code. This runs periodically, set by sampleRate variable
@@ -336,7 +336,7 @@ void setup() {
         TinyUSBDevice.attach();
     }
     
-    analogReference(AR_INTERNAL);
+    analogReference(AR_INTERNAL_1_8);// AR_INTERNAL
     // Set the resolution to 12-bit (0..4095)
     analogReadResolution(12); // Can be 8, 10, 12 or 14
 
@@ -348,12 +348,13 @@ void setup() {
         SPI.transfer(0x12); //CTRL3_C register address
         SPI.transfer(0x05);
     digitalWrite(cSelect2, HIGH); 
+    delay(10);
 
     //set up the multi-byte read and register sync
-    digitalWrite(cSelect2, LOW);
-      SPI.transfer(0x12);
-      SPI.transfer(0x44); // BDU = 1, IF_INC = 1
-    digitalWrite(cSelect2, HIGH);
+    //digitalWrite(cSelect2, LOW);
+    //  SPI.transfer(0x12);
+    //  SPI.transfer(0x44); // BDU = 1, IF_INC = 1
+    //digitalWrite(cSelect2, HIGH);
 
     delay(100);
 
@@ -471,7 +472,7 @@ size_t writeDataOverBLE(uint16_t conn_hdl, const uint8_t *content, size_t len)
 }
 
 // get battery level
-void batLevel() {
+void batLevel2() {
   // Read the ADC value from the battery pin
   uint16_t ADCRead = analogRead(32);
   
@@ -492,9 +493,33 @@ void batLevel() {
   // If you require an integer percentage, you can cast the result:
   uint8_t batOUT = (uint8_t)batteryPercent;
   Serial.println(batOUT);
+  Serial.print(batteryPercent);
   
   // Output the battery percentage
   blebas.write(batOUT);
+}
+
+void batLevel() {
+  // 760 = 1v
+  uint16_t ADCRead;
+  uint8_t batOUT = 100;
+  ADCRead = analogRead(32);
+
+
+    if(ADCRead < 3116){batOUT = 90;}
+    if(ADCRead < 3040){batOUT = 80;}
+    if(ADCRead < 2964){batOUT = 70;}
+    if(ADCRead < 2888){batOUT = 60;}
+    if(ADCRead < 2812){batOUT = 50;}
+    if(ADCRead < 2736){batOUT = 40;}
+    if(ADCRead < 2660){batOUT = 30;}
+    if(ADCRead < 2584){batOUT = 20;}
+    if(ADCRead < 2508){batOUT = 10;}
+    if(ADCRead < 2432){batOUT = 0;}
+
+  
+    blebas.write(batOUT);
+
 }
 
 
@@ -547,7 +572,7 @@ void loop() {
 
             // taken from the ble uart service
             //writeDataOverBLE(Bluefruit.connHandle(), ptrOutBuffer, OUTATIME * 2);  // OUTATIME * 2 for 2 bytes per int16_t
-            writeDataOverBLE(Bluefruit.connHandle(), ptrOutBuffer, OUTATIME * (number_of_values*2));  // 240 bytes = 40 samples * 6 bytes
+            writeDataOverBLE(Bluefruit.connHandle(), ptrOutBuffer, OUTATIME * (number_of_values*2));  // 160 bytes = 20 samples * 8 bytes
             
             // Update the buffer out index
             dBufferOut = dBufferOut + OUTATIME;
@@ -557,5 +582,5 @@ void loop() {
             }
         }
     }
-    batLevel();  
+    //batLevel2();  
 }
