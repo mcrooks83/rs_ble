@@ -5,6 +5,7 @@
 //#include "SdFat_Adafruit_Fork.h"
 //#include "Adafruit_SPIFlash.h"
 #include "Adafruit_TinyUSB.h"
+#include <Adafruit_NeoPixel.h>
 
 // for flashTransport definition
 //#include "flash_config.h"
@@ -67,6 +68,51 @@ bool streamNotifyEnabled = false;
 uint8_t stream_command = 0x00;
 int number_of_values = 4; //default for all axis and mag
 uint16_t OUTATIME = 100; // made global so memory is not reallocated (not sure if this really matters)
+
+// NeoPixel
+#define PIN  3 
+#define NUMPIXELS 1
+Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
+
+// flash in loop variables
+uint32_t lastFlashMillis = 0;
+const uint32_t FLASH_INTERVAL = 5000; // 5 seconds
+const uint32_t FLASH_DURATION = 100;  // 100 ms flash
+
+void clearPixels() {
+  for (int i = 0; i < NUMPIXELS; i++) {
+    pixels.setPixelColor(i, pixels.Color(0, 0, 0)); // Off
+  }
+  pixels.show();
+}
+
+void showGreen() {
+  for (int i = 0; i < NUMPIXELS; i++) {
+    pixels.setPixelColor(i, pixels.Color(0, 255, 0)); // Green
+  }
+  pixels.show();
+}
+
+void showBlue() {
+  for(int i=0; i<NUMPIXELS; i++) {
+    pixels.setPixelColor(i, pixels.Color(0, 0, 255)); // Blue
+  }
+  pixels.show();
+}
+
+void showRed() {
+  for(int i=0; i<NUMPIXELS; i++) {
+    pixels.setPixelColor(i, pixels.Color(255, 0, 0)); // Red
+  }
+  pixels.show();
+}
+
+void showOrange() {
+  for(int i=0; i<NUMPIXELS; i++) {
+    pixels.setPixelColor(i, pixels.Color(255, 165, 0)); // Orange (approximate)
+  }
+  pixels.show();
+}
 
 //*******************************************************************************************************************
 //Interrupt code. This runs periodically, set by sampleRate variable
@@ -149,12 +195,6 @@ void SysTick_Handler(void)
 void cccd_callback(uint16_t conn_hdl, BLECharacteristic* chr, uint16_t cccd_value) {
   if (chr->uuid == streamDataChar.uuid) {
     streamNotifyEnabled = (cccd_value & BLE_GATT_HVX_NOTIFICATION);
-
-    if (streamNotifyEnabled) {
-      Serial.println("Notifications ENABLED");
-    } else {
-      Serial.println("Notifications DISABLED");
-    }
   }
 }
 // Callback for control characteristic (start/stop streaming)
@@ -178,35 +218,41 @@ void controlCallback(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data, u
         stream_command = 0x01;
         number_of_values = 4;
         enableInt = 1;  // andres enable flag
+        showGreen();
         break;
 
       case 0x02: // stream only magnitude
         stream_command = 0x02;
         number_of_values = 1;
         enableInt = 1;
+        showGreen();
         break;
 
       case 0x03: // stream only X
         stream_command = 0x03;
         number_of_values = 1;
         enableInt = 1;
+        showGreen();
         break;
       
       case 0x04: // stream only Y
         stream_command = 0x04;
         number_of_values = 1;
         enableInt = 1;
+        showGreen();
         break;
 
       case 0x05: // stream only Z
         stream_command = 0x03;
         number_of_values = 1;
         enableInt = 1;
+        showGreen();
         break;
       
       case 0x00:
         stream_command = 0x00;
         enableInt = 0;
+        showBlue(); // connected but stopped
         break;
 
     }
@@ -215,17 +261,19 @@ void controlCallback(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data, u
 
 // Callback for identify characteristic (flash LED)
 void identifyCallback(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data, uint16_t len){
-  Serial.println("Identify Callback Triggered");
     if (data[0] == 0x01) {
         uint32_t startMillis = millis();
         
         while (millis() - startMillis < IDENTIFY_DURATION) {
             digitalWrite(LED_PIN, HIGH);  // Turn LED on
+            showRed();      // Turn on red
             delay(100);                   // Wait for 500 milliseconds (0.5 seconds)
             digitalWrite(LED_PIN, LOW);   // Turn LED off
+            clearPixels();  // Turn off
             delay(100);                   // Wait for 500 milliseconds
         }
         digitalWrite(LED_PIN, HIGH); 
+        showBlue(); // connected state
     }
 }
 
@@ -233,15 +281,13 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason)
 {
   (void) conn_handle;
   (void) reason;
-  Serial.println();
-  Serial.print("Disconnected, reason = 0x"); Serial.println(reason, HEX);
+  showOrange();  //if the device is disconnect (probably want to flash as it is discovereable)
 }
 
 
 // use this to make sure that the settings are correct
 void connect_callback(uint16_t conn_handle)
 {
-    Serial.print("connect callback");
   BLEConnection* conn = Bluefruit.Connection(conn_handle);
 
   // request PHY changed to 2MB
@@ -259,12 +305,14 @@ void connect_callback(uint16_t conn_handle)
 
   // delay a bit for all the request to complete
   delay(1000);
+  showBlue();
 }
 
 void setup() {
-    Serial.begin(115200);
-    delay(100);
 
+    //Serial.begin(115200);
+    //while (!Serial); // wait for serial monitor
+    //delay(100);
     //set pin as an output
     pinMode ( cSelect2, OUTPUT );
     // set acceleromter chip high to deselect
@@ -276,6 +324,11 @@ void setup() {
 
     // on board led to indentify with
     pinMode(LED_PIN, OUTPUT);
+
+    pixels.begin(); // INITIALIZE NeoPixel
+    pixels.clear();
+    pixels.setPixelColor(0, pixels.Color(10, 10, 10));
+    pixels.show();
 
     // Initialize BLE'
     Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);  
@@ -330,11 +383,11 @@ void setup() {
     
 
     // not sure what this does?
-    if (TinyUSBDevice.mounted()) {
+    /*if (TinyUSBDevice.mounted()) {
         TinyUSBDevice.detach();
         delay(10);
         TinyUSBDevice.attach();
-    }
+    }*/
     
     analogReference(AR_INTERNAL_1_8);// AR_INTERNAL
     // Set the resolution to 12-bit (0..4095)
@@ -348,13 +401,13 @@ void setup() {
         SPI.transfer(0x12); //CTRL3_C register address
         SPI.transfer(0x05);
     digitalWrite(cSelect2, HIGH); 
-    delay(10);
+    delay(100);
 
     //set up the multi-byte read and register sync
-    //digitalWrite(cSelect2, LOW);
-    //  SPI.transfer(0x12);
-    //  SPI.transfer(0x44); // BDU = 1, IF_INC = 1
-    //digitalWrite(cSelect2, HIGH);
+    digitalWrite(cSelect2, LOW);
+      SPI.transfer(0x12);
+      SPI.transfer(0x44); // BDU = 1, IF_INC = 1
+    digitalWrite(cSelect2, HIGH);
 
     delay(100);
 
@@ -378,6 +431,8 @@ void setup() {
     digitalWrite(cSelect2, HIGH); 
 
     SysTick_Config( (F_CPU/sampleRate)*TICK_INTERVAL_MS );
+
+    showOrange(); //discoverable
 
     //bufferTXD(true);
 }
@@ -447,7 +502,7 @@ size_t writeDataOverBLE(uint16_t conn_hdl, const uint8_t *content, size_t len)
     //return len;
   }else
   {
-    Serial.println("did not notify right away");
+    //Serial.println("did not notify right away");
     uint16_t written = _tx_fifo->write(content, len);
 
     // Not up to GATT MTU, notify will be sent later by TXD timer handler
@@ -492,8 +547,8 @@ void batLevel2() {
   
   // If you require an integer percentage, you can cast the result:
   uint8_t batOUT = (uint8_t)batteryPercent;
-  Serial.println(batOUT);
-  Serial.print(batteryPercent);
+  //Serial.println(batOUT);
+  //Serial.print(batteryPercent);
   
   // Output the battery percentage
   blebas.write(batOUT);
@@ -572,7 +627,7 @@ void loop() {
 
             // taken from the ble uart service
             //writeDataOverBLE(Bluefruit.connHandle(), ptrOutBuffer, OUTATIME * 2);  // OUTATIME * 2 for 2 bytes per int16_t
-            writeDataOverBLE(Bluefruit.connHandle(), ptrOutBuffer, OUTATIME * (number_of_values*2));  // 160 bytes = 20 samples * 8 bytes
+            writeDataOverBLE(Bluefruit.connHandle(), ptrOutBuffer, OUTATIME * (number_of_values*2));  // 200 bytes = 100 samples * 2 bytes
             
             // Update the buffer out index
             dBufferOut = dBufferOut + OUTATIME;
@@ -581,6 +636,14 @@ void loop() {
               
             }
         }
+        // Streaming: Only flash green if enableInt == 1
+        /*if (millis() - lastFlashMillis >= FLASH_INTERVAL) {
+          showGreen();
+          delay(FLASH_DURATION);
+          clearPixels();
+          lastFlashMillis = millis();
+        }*/
     }
+    // here the device may be discoverable or connected an LED should show accordingly
     //batLevel2();  
 }

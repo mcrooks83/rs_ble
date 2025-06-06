@@ -24,11 +24,15 @@ rs load sensor
 #define MEASUREMENT_NOTIFY_CHAR_UUID     "f9300002-67d2-4b32-9a68-5f3d93a8b6a5"
 #define SENSOR_IDENTIFY_CHAR_UUID        "f9300004-67d2-4b32-9a68-5f3d93a8b6a5"
 
-'''
-MEASUREMENT_SERVICE_UUID     =  "f9300001-67d2-4b32-9a68-5f3d93a8b6a5"
+vag sensor
+#define MEASUREMENT_SERVICE_UUID         "f8300001-67d2-4b32-9a68-5f3d93a8b6a5"
+#define MEASUREMENT_NOTIFY_CHAR_UUID     "f8300002-67d2-4b32-9a68-5f3d93a8b6a5"
+#define SENSOR_IDENTIFY_CHAR_UUID        "f8300004-67d2-4b32-9a68-5f3d93a8b6a5"
 
-MEASUREMENT_CHAR_UUID        =  "f9300002-67d2-4b32-9a68-5f3d93a8b6a5"
-SENSOR_IDENTIFY_CHAR_UUID    =  "f9300004-67d2-4b32-9a68-5f3d93a8b6a5"
+'''
+MEASUREMENT_SERVICE_UUID     =  "f8300001-67d2-4b32-9a68-5f3d93a8b6a5"
+MEASUREMENT_CHAR_UUID        =  "f8300002-67d2-4b32-9a68-5f3d93a8b6a5"
+SENSOR_IDENTIFY_CHAR_UUID    =  "f8300004-67d2-4b32-9a68-5f3d93a8b6a5"
 
 #NORDIC_UART_SERVICE_UUID     =  "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 
@@ -111,6 +115,9 @@ def on_data(sender: int, data: bytearray):
     _packet = parse_packet(data)
     print(_packet)
 
+def on_vag_data(sender: int, data: bytearray):
+    print(data)
+
 # Connect and subscribe to notifications
 async def connect_device(device):
     async with BleakClient(device) as client:
@@ -128,21 +135,21 @@ async def connect_device(device):
         
         # Subscribe to notifications
         #MEASUREMENT_NOTIFY_CHAR_UUID NORDIC_UART_SERVICE_UUID
-        await client.start_notify(MEASUREMENT_CHAR_UUID, on_data)
+        await client.start_notify(MEASUREMENT_CHAR_UUID, on_vag_data)
         print("Subscribed to data")
 
         # try and indentify the device
-        response = await client.write_gatt_char(SENSOR_IDENTIFY_CHAR_UUID, bytearray([0x01]))
+        #response = await client.write_gatt_char(SENSOR_IDENTIFY_CHAR_UUID, bytearray([0x01]))
         # Simulate LED flashing logic
         #print("LED should be flashing now!")
-        await asyncio.sleep(5)
+        await asyncio.sleep(2)
 
-        await client.write_gatt_char(MEASUREMENT_CHAR_UUID, bytearray([0x02]))  # asks to stream all axes and magnitude
+        await client.write_gatt_char(MEASUREMENT_CHAR_UUID, bytearray([0x04]))  # asks to stream all axes and magnitude
         #await client.write_gatt_char(MEASUREMENT_CHAR_UUID, bytearray([0x02]))  # asks to stream  magnitude
         #await client.write_gatt_char(MEASUREMENT_CHAR_UUID, bytearray([0x03]))  # asks to stream  X
         #await client.write_gatt_char(MEASUREMENT_CHAR_UUID, bytearray([0x04]))  # asks to stream  Y
         #await client.write_gatt_char(MEASUREMENT_CHAR_UUID, bytearray([0x05]))  # asks to stream  Z
-        #print("Streaming started")
+        print("Streaming started")
     
         # Wait while data streams — non-blocking sleep
         await asyncio.sleep(10)
@@ -159,8 +166,9 @@ async def connect_device(device):
 
 # Main function to discover and connect
 async def main():
+    remove_all_devices()
     #devices = await discover_device_by_name("SekMo B")
-    devices = await discover_device_by_name("RS_LOAD")
+    devices = await discover_device_by_name("RS_VAG")
     device_address = ""
     for device, advertisement_data in devices:
         device_address = device.address
